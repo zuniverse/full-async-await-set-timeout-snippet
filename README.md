@@ -22,5 +22,5 @@ setTimeout in a full async await environment is a nightmare. Here is a personal 
       }
       // return await hideScannerAfterDelay(delay_in_ms)
       hideScannerAfterDelay(delay_in_ms) // do not return or await, to get asynchronous behavior
-    },
+    }
 ```
