@@ -1,6 +1,8 @@
 # full-async-await-set-timeout-snippet
 
-setTimeout in a full async await environment is a nightmare. Here is a personal solution.
+setTimeout in a full async await environment is a nightmare. Here is a personal solution in javascript.
+
+I added a typescript port.
 
 ```js
     /**
