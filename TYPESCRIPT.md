@@ -32,7 +32,7 @@ new Promise<void>((res) => {
 
 Without the type argument, TypeScript infers `Promise<unknown>` and types the
 resolver as `(value: unknown) => void`. That signature requires an argument,
-while `setTimeout` invokes its callback with none — so `setTimeout(res, ms)`
+while `setTimeout` invokes its callback with none - so `setTimeout(res, ms)`
 fails to type-check.
 
 Declaring `Promise<void>` makes `res` a zero-argument function and the call
@@ -45,7 +45,7 @@ only marks the passage of time.
 if (this.timeoutId !== null) clearTimeout(this.timeoutId);
 ```
 
-Neither the DOM nor the Node signature of `clearTimeout` accepts `null` — both
+Neither the DOM nor the Node signature of `clearTimeout` accepts `null` - both
 stop at `undefined`. Since the field is `TimeoutId | null`, the call needs
 narrowing.
 
@@ -58,12 +58,12 @@ the intent directly: there is nothing to clear on the first call.
 void hideScannerAfterDelay(delay_in_ms); // do not return or await
 ```
 
-Not awaiting is the whole point of the snippet — the method must return
+Not awaiting is the whole point of the snippet - the method must return
 immediately and let the timer run on its own. But an unhandled promise is
 normally a bug, and `@typescript-eslint/no-floating-promises` flags it.
 
-The `void` operator is the idiomatic way to say *this promise is dropped on
-purpose*, which silences the rule and tells the next reader that the omission
+The `void` operator is the idiomatic way to say _this promise is dropped on
+purpose_, which silences the rule and tells the next reader that the omission
 was a decision rather than an oversight.
 
 ## Aside: the redundant `async`
