@@ -18,7 +18,7 @@ The classic wrapper const sleep = ms => new Promise(r => setTimeout(r, ms)) turn
 
 This is the painful one. A promise cannot be cancelled. If you write await sleep(ms), the id returned by setTimeout stays trapped inside the new Promise closure and you can never call clearTimeout again. You lose the debounce behaviour: "calling the function again cancels the pending run and restarts the delay".
 
-The snippet's solution is exactly there, at turnScannerOffAfterDelay.js:14 :
+The snippet's solution is exactly there, at turnScannerOffAfterDelay.js:13 :
 
 `this.timeoutId = setTimeout(res, ms);   // the id escapes the closure into instance state`
 
@@ -40,9 +40,15 @@ turnScannerOffAfterDelay is async and therefore returns a promise - but that pro
 
 The line at the top of this README means: as soon as you want a cancellable timer in an async/await world, you are stuck between a callback API you cannot await and a promise you cannot cancel. The solution here is to promisify only the waiting, keeping the timer id in instance state so cancellation is preserved.
 
-#### The modern solution, without a suspended frame, from node:timers/promises :
+#### The modern solution, without a suspended frame: AbortSignal
 
-AbortSignal handles the case cleanly - setTimeout(cb, ms, { signal }) on the DOM side, or await setTimeout(ms, undefined, { signal }) from node:timers/promises, where aborting rejects the promise (AbortError) instead of leaving it pending.
+AbortSignal handles the case cleanly: aborting rejects the promise (AbortError) instead of leaving it pending, so the async frame finishes instead of staying suspended.
+
+On Node it is built in: await setTimeout(ms, undefined, { signal }) from node:timers/promises.
+
+On the DOM side there is no native equivalent: setTimeout takes no options bag, its arguments after ms are passed to the callback. So you need either a small wrapper that calls clearTimeout and reject on the abort event, or scheduler.postTask(cb, { delay: ms, signal }) (partial support).
+
+Both approaches are written out in turnScannerOffAfterDelay.modern.js.
 
 ## fr
 
@@ -58,7 +64,7 @@ Le wrapper classique const sleep = ms => new Promise(r => setTimeout(r, ms)) tra
 
 C'est le point douloureux. Une promesse n'est pas annulable. Si tu écris await sleep(ms), l'id retourné par setTimeout reste prisonnier de la closure du new Promise et tu ne peux plus jamais appeler clearTimeout. Tu perds le comportement de debounce : « rappeler la fonction annule le run en attente et redémarre le délai ».
 
-La solution du snippet est exactement là, à turnScannerOffAfterDelay.js:14 :
+La solution du snippet est exactement là, à turnScannerOffAfterDelay.js:13 :
 
 `this.timeoutId = setTimeout(res, ms);   // l'id sort de la closure vers l'état d'instance`
 
@@ -80,9 +86,15 @@ turnScannerOffAfterDelay est async et retourne donc une promesse - mais elle se 
 
 La phrase du README veut dire : dès qu'on veut un timer annulable dans un monde async/await, on est coincé entre une API callback qu'on ne peut pas attendre et une promesse qu'on ne peut pas annuler. La solution consiste à ne promisifier que l'attente, en gardant l'id du timer dans l'état de l'instance pour conserver l'annulation.
 
-#### La solution moderne sans frame suspendue depuis node:timers/promises :
+#### La solution moderne sans frame suspendue : AbortSignal
 
-AbortSignal règle proprement le cas - setTimeout(cb, ms, { signal }) côté DOM, ou await setTimeout(ms, undefined, { signal }) depuis node:timers/promises, où l'abort rejette la promesse (AbortError) au lieu de la laisser pending.
+AbortSignal règle proprement le cas : l'abort rejette la promesse (AbortError) au lieu de la laisser pending, donc la frame async se termine au lieu de rester suspendue.
+
+Sous Node, c'est natif : await setTimeout(ms, undefined, { signal }) depuis node:timers/promises.
+
+Côté DOM il n'y a pas d'équivalent natif : setTimeout n'accepte pas d'options bag, ses arguments après ms sont passés au callback. Il faut donc soit un petit wrapper qui appelle clearTimeout et reject sur l'événement abort, soit scheduler.postTask(cb, { delay: ms, signal }) (support partiel).
+
+Les deux approches sont écrites dans turnScannerOffAfterDelay.modern.js.
 
 ## Files
 
@@ -90,6 +102,7 @@ AbortSignal règle proprement le cas - setTimeout(cb, ms, { signal }) côté DOM
 | -------------------------------------------------------------- | ------------------------------------------------------------ |
 | [`turnScannerOffAfterDelay.js`](./turnScannerOffAfterDelay.js) | The snippet, with the original `console.log` traces kept in. |
 | [`turnScannerOffAfterDelay.ts`](./turnScannerOffAfterDelay.ts) | TypeScript port, type-checked under `strict`.                |
+| [`turnScannerOffAfterDelay.modern.js`](./turnScannerOffAfterDelay.modern.js) | The AbortSignal rewrite: cancelling rejects instead of leaving the promise pending. |
 | [`TYPESCRIPT.md`](./TYPESCRIPT.md)                             | Why the port is typed the way it is.                         |
 
 The block above is the same code with the logging removed, to keep the pattern
