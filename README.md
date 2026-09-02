@@ -50,6 +50,39 @@ On the DOM side there is no native equivalent: setTimeout takes no options bag, 
 
 Both approaches are written out in turnScannerOffAfterDelay.modern.js.
 
+## The modern TypeScript version
+
+Interestingly, the AbortSignal rewrite makes **three of the four typing decisions**
+documented in [`TYPESCRIPT.md`](./TYPESCRIPT.md) disappear.
+
+| Point from TYPESCRIPT.md           | Status in the modern version                                                                                                                                                           |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `ReturnType<typeof setTimeout>` | **Gone.** The instance state is no longer a timer id but an `AbortController` - a standard type, identical on the DOM and on Node. No more portability problem between `lib` settings. |
+| 2. Explicit `new Promise<void>`    | **Still there**, inside the `delay` helper. It is inherent to promisifying `setTimeout` at all.                                                                                        |
+| 3. Guarding `clearTimeout`         | **Gone.** `clearTimeout` now lives in the `abort` handler, where the id is a local `const` that is never null.                                                                         |
+| 4. `void` on the floating promise  | **Gone.** The `.catch()` is enough to satisfy `no-floating-promises` - and it is there for a real reason, not merely to silence the rule.                                              |
+
+### A new constraint, specific to `strict`
+
+Under `strict`, `useUnknownInCatchVariables` types the caught value as `unknown`,
+so `err.name === "AbortError"` does not compile. Explicit narrowing is required:
+
+```ts
+const isAbortError = (err: unknown): boolean =>
+  err instanceof Error && err.name === "AbortError";
+```
+
+This is the right place to say it: telling "deliberately cancelled" apart from
+"`hideScanner()` genuinely failed" is the only business logic in the `.catch`,
+and TypeScript forces you to write it out instead of trusting an `err.name`.
+
+One non-obvious detail: the file ends with `export { ScannerController };`.
+Without it, both `.ts` files are global scripts under the same
+`include: ["*.ts"]`, and `ScannerController` would be declared twice - a
+compilation error. The `export` turns it into a module and isolates its scope.
+
+---
+
 ## fr
 
 ### Le problème
@@ -96,14 +129,49 @@ Côté DOM il n'y a pas d'équivalent natif : setTimeout n'accepte pas d'options
 
 Les deux approches sont écrites dans turnScannerOffAfterDelay.modern.js.
 
+## La version TypeScript moderne
+
+Fait intéressant, la réécriture avec AbortSignal fait disparaître **trois des quatre
+décisions de typage** documentées dans [`TYPESCRIPT.md`](./TYPESCRIPT.md).
+
+| Point de TYPESCRIPT.md              | Statut dans la version moderne                                                                                                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `ReturnType<typeof setTimeout>`  | **Disparu.** L'état d'instance n'est plus un id de timer mais un `AbortController` - un type standard, identique en DOM et en Node. Plus de problème de portabilité entre `lib`. |
+| 2. `new Promise<void>` explicite    | **Toujours là**, dans le helper `delay`. C'est inhérent à toute promisification de `setTimeout`.                                                                                 |
+| 3. Garde sur `clearTimeout`         | **Disparue.** Le `clearTimeout` vit maintenant dans le handler `abort`, où l'id est un `const` local jamais nul.                                                                 |
+| 4. `void` sur la promesse flottante | **Disparu.** Le `.catch()` suffit à satisfaire `no-floating-promises` - et il est là pour une vraie raison, pas juste pour taire la règle.                                       |
+
+### Une nouvelle contrainte, propre à `strict`
+
+Sous `strict`, `useUnknownInCatchVariables` type la valeur capturée en `unknown`,
+donc `err.name === "AbortError"` ne compile pas. Il faut un narrowing explicite :
+
+```ts
+const isAbortError = (err: unknown): boolean =>
+  err instanceof Error && err.name === "AbortError";
+```
+
+C'est le bon endroit pour le dire : distinguer « annulé volontairement » de
+« `hideScanner()` a vraiment échoué » est la seule logique métier du `.catch`,
+et TypeScript t'oblige à l'écrire proprement au lieu de faire confiance à un
+`err.name`.
+
+Un détail non évident : le fichier se termine par `export { ScannerController };`.
+Sans ça, les deux `.ts` sont des scripts globaux sous le même
+`include: ["*.ts"]`, et `ScannerController` serait déclaré deux fois - erreur de
+compilation. L'`export` en fait un module et isole sa portée.
+
+---
+
 ## Files
 
-| File                                                           | Contents                                                     |
-| -------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`turnScannerOffAfterDelay.js`](./turnScannerOffAfterDelay.js) | The snippet, with the original `console.log` traces kept in. |
-| [`turnScannerOffAfterDelay.ts`](./turnScannerOffAfterDelay.ts) | TypeScript port, type-checked under `strict`.                |
+| File                                                                         | Contents                                                                            |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [`turnScannerOffAfterDelay.js`](./turnScannerOffAfterDelay.js)               | The snippet, with the original `console.log` traces kept in.                        |
+| [`turnScannerOffAfterDelay.ts`](./turnScannerOffAfterDelay.ts)               | TypeScript port, type-checked under `strict`.                                       |
 | [`turnScannerOffAfterDelay.modern.js`](./turnScannerOffAfterDelay.modern.js) | The AbortSignal rewrite: cancelling rejects instead of leaving the promise pending. |
-| [`TYPESCRIPT.md`](./TYPESCRIPT.md)                             | Why the port is typed the way it is.                         |
+| [`turnScannerOffAfterDelay.modern.ts`](./turnScannerOffAfterDelay.modern.ts) | TypeScript port of the AbortSignal rewrite, type-checked under `strict`.            |
+| [`TYPESCRIPT.md`](./TYPESCRIPT.md)                                           | Why the port is typed the way it is.                                                |
 
 The block above is the same code with the logging removed, to keep the pattern
 readable. Run `npx tsc` to type-check the TypeScript port.
