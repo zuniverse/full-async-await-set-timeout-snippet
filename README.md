@@ -4,6 +4,46 @@ setTimeout in a full async await environment is a nightmare. Here is a personal 
 
 I added a typescript port.
 
+## en
+
+### The problem
+
+**setTimeout is a callback API from before promises.** In a codebase written entirely with async/await, it is the one thing that cannot be awaited - and the obvious fix (promisifying it) breaks the very reason we were using it.
+
+#### 1. setTimeout is not awaitable, but we do not want to await it either
+
+The classic wrapper const sleep = ms => new Promise(r => setTimeout(r, ms)) turns the delay into something awaitable. Except that here we do not want to block the caller for 2 minutes: we want to schedule a deferred action and return immediately. Hence the comment on line 25 of turnScannerOffAfterDelay.js:25 - hideScannerAfterDelay(...) is deliberately not awaited.
+
+#### 2. Promisifying makes the timer id disappear -> cancellation is lost
+
+This is the painful one. A promise cannot be cancelled. If you write await sleep(ms), the id returned by setTimeout stays trapped inside the new Promise closure and you can never call clearTimeout again. You lose the debounce behaviour: "calling the function again cancels the pending run and restarts the delay".
+
+The snippet's solution is exactly there, at turnScannerOffAfterDelay.js:14 :
+
+`this.timeoutId = setTimeout(res, ms);   // the id escapes the closure into instance state`
+
+The id is hoisted onto the instance while the promise itself stays inside. That is what lets the clearTimeout(this.timeoutId) at the top of the method cancel the previous call.
+
+#### 3. Cancelling a promisified timer leaves a forever-pending promise
+
+Corollary of point 2: clearTimeout prevents res from ever being called, so the promise neither resolves nor rejects, ever. The await inside hideScannerAfterDelay stays suspended for good, and with it the whole async function frame. In this snippet, every restart of the delay therefore leaves a suspended frame behind - it is bounded and tiny, but it is the accepted trade-off of the pattern, and it is typically what makes setTimeout + async/await unpleasant to reason about.
+
+#### 4. Errors do not surface where you expect them
+
+An exception thrown inside a setTimeout callback runs on another tick: no enclosing try/catch will catch it. And since the promise floats here (never awaited), a rejection from this.hideScanner() ends up as an unhandledRejection instead of propagating to the caller.
+
+#### 5. The promise "lies" about its completion
+
+turnScannerOffAfterDelay is async and therefore returns a promise - but that promise resolves immediately, not when the scanner has been hidden. A caller doing await controller.turnScannerOffAfterDelay() believes it is awaiting the work while it is awaiting nothing. This is the redundant async noted as an aside in TYPESCRIPT.md, and the reason for the void in point 4 of that same file: to signal that the floating promise is intentional.
+
+#### In short
+
+The line at the top of this README means: as soon as you want a cancellable timer in an async/await world, you are stuck between a callback API you cannot await and a promise you cannot cancel. The solution here is to promisify only the waiting, keeping the timer id in instance state so cancellation is preserved.
+
+#### The modern solution, without a suspended frame, from node:timers/promises :
+
+AbortSignal handles the case cleanly - setTimeout(cb, ms, { signal }) on the DOM side, or await setTimeout(ms, undefined, { signal }) from node:timers/promises, where aborting rejects the promise (AbortError) instead of leaving it pending.
+
 ## fr
 
 ### Le problème
@@ -38,7 +78,7 @@ turnScannerOffAfterDelay est async et retourne donc une promesse - mais elle se 
 
 #### En résumé
 
-La phrase du README veut dire : dès qu'on veut un timer annulable dans un monde async/await, on est coincé entre une API callback qu'on ne peut pas attendre et une promesse qu'on ne peut pas annuler. Ta solution consiste à ne promisifier que l'attente, en gardant l'id du timer dans l'état de l'instance pour conserver l'annulation.
+La phrase du README veut dire : dès qu'on veut un timer annulable dans un monde async/await, on est coincé entre une API callback qu'on ne peut pas attendre et une promesse qu'on ne peut pas annuler. La solution consiste à ne promisifier que l'attente, en gardant l'id du timer dans l'état de l'instance pour conserver l'annulation.
 
 #### La solution moderne sans frame suspendue depuis node:timers/promises :
 
